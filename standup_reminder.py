@@ -11,8 +11,10 @@ import zipfile
 import shutil
 import subprocess
 import time as time_module
+from AppKit import NSAlternateKeyMask
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
+SNOOZE_DURATION = 5 * 60  # 5 minutes in seconds
 GITHUB_REPO = "ricardogo/sit-down-stand-up"
 VERSION_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/version.json"
 UPDATE_CHECK_INTERVAL = 24 * 60 * 60  # 24 hours in seconds
@@ -29,27 +31,44 @@ class StandUpApp(rumps.App):
         self.countdown_duration = 5 * 60  # 5 minutes in seconds
         self.time_remaining = self.work_duration
         self.is_countdown = False
+        self.is_snooze = False  # Track if we're in snooze mode
         self.current_interval = "30 minutes"
 
         # Create the rumps timer (runs on main thread)
         self.timer = rumps.Timer(self.tick, 1)
 
         # Create interval submenu
+        # Hidden placeholder that "1 minute" replaces when Option is held
+        self.placeholder_item = rumps.MenuItem("")  # Empty/invisible item
+        self.one_minute_item = rumps.MenuItem("1 minute", callback=self.change_interval)
         self.interval_menu_items = [
-            rumps.MenuItem("1 minute", callback=self.change_interval),
+            self.placeholder_item,  # Invisible placeholder
+            self.one_minute_item,   # Alternate - replaces placeholder when Option held
             rumps.MenuItem("30 minutes", callback=self.change_interval),
             rumps.MenuItem("1 hour", callback=self.change_interval),
         ]
 
-        # Set default checkmark
-        self.interval_menu_items[1].state = True
+        # Set default checkmark on 30 minutes (index 2 now)
+        self.interval_menu_items[2].state = True
+
+        # Make placeholder hidden (no callback = grayed/hidden effect)
+        self.placeholder_item._menuitem.setHidden_(True)
+
+        # Make "1 minute" an alternate to the placeholder (appears when Option held)
+        self.one_minute_item._menuitem.setAlternate_(True)
+        self.one_minute_item._menuitem.setKeyEquivalentModifierMask_(NSAlternateKeyMask)
 
         # Store reference to timer display menu item
         self.timer_menu_item = rumps.MenuItem("Time until standing up: 30:00")
 
+        # Snooze menu item (only visible during stand up mode)
+        self.snooze_menu_item = rumps.MenuItem("Snooze", callback=self.snooze_clicked)
+        self.snooze_menu_item._menuitem.setHidden_(True)  # Initially hidden
+
         # Menu items
         self.menu = [
             self.timer_menu_item,
+            self.snooze_menu_item,
             rumps.separator,
             ("Remind me every...", self.interval_menu_items),
             rumps.MenuItem("Reset Reminder", callback=self.reset_timer),
@@ -71,6 +90,13 @@ class StandUpApp(rumps.App):
         self.check_for_updates_auto(None)
 
         self.timer.start()
+
+    @rumps.notifications
+    def notification_center(self, info):
+        """Handle notification action button clicks"""
+        print(f"Notification clicked! Info: {info}")  # Debug
+        if self.is_countdown:
+            self.snooze()
 
     @property
     def config_path(self):
@@ -126,24 +152,44 @@ class StandUpApp(rumps.App):
     def start_countdown(self):
         """Start the 5-minute countdown after work period"""
         self.is_countdown = True
+        self.is_snooze = False
         self.time_remaining = self.countdown_duration
         self.title = "🧍"  # Standing person emoji
+        self.snooze_menu_item._menuitem.setHidden_(False)  # Show snooze menu
 
-        # Show notification
+        # Show notification with Snooze button
         rumps.notification(
             title="Stand Up",
             subtitle="",
             message="Stand up, stretch, and move around for 5 minutes.",
             sound=False,
+            action_button="Snooze",
+            icon=None,
         )
+
+        self.update_display()
+
+    def snooze_clicked(self, _):
+        """Handle snooze menu item click"""
+        self.snooze()
+
+    def snooze(self):
+        """Snooze the stand up reminder for 5 minutes"""
+        self.is_countdown = False
+        self.is_snooze = True
+        self.time_remaining = SNOOZE_DURATION
+        self.title = "😴"
+        self.snooze_menu_item._menuitem.setHidden_(True)  # Hide snooze menu
 
         self.update_display()
 
     def restart_work_timer(self):
         """Restart the work timer after countdown"""
         self.is_countdown = False
+        self.is_snooze = False
         self.time_remaining = self.work_duration
         self.title = "🪑"  # Chair emoji
+        self.snooze_menu_item._menuitem.setHidden_(True)  # Hide snooze menu
 
         # Show notification
         rumps.notification(
@@ -151,6 +197,7 @@ class StandUpApp(rumps.App):
             subtitle="",
             message=f"{self.current_interval} timer has been reset.",
             sound=False,
+            icon=None,
         )
 
         self.update_display()
@@ -167,16 +214,22 @@ class StandUpApp(rumps.App):
                 time_str = f"{minutes}m"
             self.title = f"🧍 {time_str}"
             self.timer_menu_item.title = f"Stand up time: {time_str}"
+        elif self.is_snooze:
+            # Snooze mode - show sleep emoji
+            self.title = "😴"
+            self.timer_menu_item.title = f"Snoozed: {minutes}m"
         else:
-            # Just show emoji during work mode
+            # Normal sit down mode
             self.title = "🪑"
             self.timer_menu_item.title = f"Time until standing up: {minutes}m"
 
     def reset_timer(self, sender):
         """Reset the timer to start over"""
         self.is_countdown = False
+        self.is_snooze = False
         self.time_remaining = self.work_duration
         self.title = "🪑"
+        self.snooze_menu_item._menuitem.setHidden_(True)  # Hide snooze menu
 
         self.update_display()
 
@@ -197,8 +250,10 @@ class StandUpApp(rumps.App):
 
         # Reset to new interval
         self.is_countdown = False
+        self.is_snooze = False
         self.time_remaining = self.work_duration
         self.title = "🪑"
+        self.snooze_menu_item._menuitem.setHidden_(True)  # Hide snooze menu
 
         self.update_display()
 
@@ -295,6 +350,7 @@ class StandUpApp(rumps.App):
                 subtitle="",
                 message="Please wait...",
                 sound=False,
+                icon=None,
             )
 
             urllib.request.urlretrieve(download_url, zip_path)
