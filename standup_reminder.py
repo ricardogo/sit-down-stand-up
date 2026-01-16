@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import time as time_module
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 GITHUB_REPO = "ricardogo/sit-down-stand-up"
 VERSION_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/version.json"
 UPDATE_CHECK_INTERVAL = 24 * 60 * 60  # 24 hours in seconds
@@ -160,8 +160,16 @@ class StandUpApp(rumps.App):
         minutes = (self.time_remaining + 59) // 60  # Round up
 
         if self.is_countdown:
-            self.timer_menu_item.title = f"Stand up time: {minutes}m"
+            # Show timer in menubar during standup mode
+            if self.time_remaining < 60:
+                time_str = "<1m"
+            else:
+                time_str = f"{minutes}m"
+            self.title = f"🧍 {time_str}"
+            self.timer_menu_item.title = f"Stand up time: {time_str}"
         else:
+            # Just show emoji during work mode
+            self.title = "🪑"
             self.timer_menu_item.title = f"Time until standing up: {minutes}m"
 
     def reset_timer(self, sender):
