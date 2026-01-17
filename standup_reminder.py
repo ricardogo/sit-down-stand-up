@@ -11,9 +11,10 @@ import zipfile
 import shutil
 import subprocess
 import time as time_module
-from AppKit import NSAlternateKeyMask
+from AppKit import NSAlternateKeyMask, NSWorkspace, NSWorkspaceScreensDidSleepNotification, NSWorkspaceScreensDidWakeNotification
+from Foundation import NSNotificationCenter
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 SNOOZE_DURATION = 5 * 60  # 5 minutes in seconds
 GITHUB_REPO = "ricardogo/sit-down-stand-up"
 VERSION_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/version.json"
@@ -89,6 +90,16 @@ class StandUpApp(rumps.App):
         # Check for updates on startup if 24h has passed
         self.check_for_updates_auto(None)
 
+        # Register for screen sleep/wake notifications
+        workspace = NSWorkspace.sharedWorkspace()
+        notification_center = workspace.notificationCenter()
+        notification_center.addObserver_selector_name_object_(
+            self, 'screenDidSleep:', NSWorkspaceScreensDidSleepNotification, None
+        )
+        notification_center.addObserver_selector_name_object_(
+            self, 'screenDidWake:', NSWorkspaceScreensDidWakeNotification, None
+        )
+
         self.timer.start()
 
     @rumps.notifications
@@ -97,6 +108,20 @@ class StandUpApp(rumps.App):
         print(f"Notification clicked! Info: {info}")  # Debug
         if self.is_countdown:
             self.snooze()
+
+    def screenDidSleep_(self, notification):
+        """Called when screen goes to sleep (user left)"""
+        self.timer.stop()
+
+    def screenDidWake_(self, notification):
+        """Called when screen wakes up (user returned) - restart timer from beginning"""
+        self.is_countdown = False
+        self.is_snooze = False
+        self.time_remaining = self.work_duration
+        self.title = "🪑"
+        self.snooze_menu_item._menuitem.setHidden_(True)
+        self.update_display()
+        self.timer.start()
 
     @property
     def config_path(self):
@@ -195,7 +220,7 @@ class StandUpApp(rumps.App):
         rumps.notification(
             title="Sit Down",
             subtitle="",
-            message=f"{self.current_interval} timer has been reset.",
+            message=f"See you in {self.current_interval} minutes.",
             sound=False,
             icon=None,
         )
