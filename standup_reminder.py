@@ -12,11 +12,78 @@ import zipfile
 import shutil
 import subprocess
 import time as time_module
-from AppKit import NSAlternateKeyMask, NSWorkspace, NSWorkspaceScreensDidSleepNotification, NSWorkspaceScreensDidWakeNotification
+from AppKit import (
+    NSAlternateKeyMask, NSWorkspace, NSWorkspaceScreensDidSleepNotification,
+    NSWorkspaceScreensDidWakeNotification, NSView, NSTextField, NSButton,
+    NSFont, NSColor, NSMakeRect, NSTextAlignmentCenter, NSBezelStyleRounded,
+    NSLineBreakByWordWrapping, NSPopover, NSViewController, NSPopoverBehaviorTransient,
+    NSMinYEdge, NSImageView, NSImage, NSImageScaleProportionallyUpOrDown
+)
 from Foundation import NSNotificationCenter
+import objc
+import UserNotifications
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 SNOOZE_DURATION = 5 * 60  # 5 minutes in seconds
+
+
+class NotificationDelegate(objc.lookUpClass('NSObject')):
+    """Delegate to handle notification interactions using UNUserNotificationCenter"""
+    app = None  # Will be set to StandUpApp instance
+
+    # UNUserNotificationCenterDelegate methods
+    # Signature: v@:@@@ = void, self, _cmd, center, response, completionHandler(block)
+    @objc.typedSelector(b'v@:@@@?')
+    def userNotificationCenter_didReceiveNotificationResponse_withCompletionHandler_(self, center, response, handler):
+        """Called when user interacts with notification"""
+        action = response.actionIdentifier()
+        user_info = response.notification().request().content().userInfo()
+        data = user_info.get("data") if user_info else None
+
+        # Check if action button was clicked (not dismiss)
+        if action == "snooze" and self.app:
+            self.app.snooze()
+        elif action == "moved" and self.app:
+            self.app.record_completed()
+        elif action == UserNotifications.UNNotificationDefaultActionIdentifier:
+            # User clicked on notification body
+            if data == "standup" and self.app:
+                self.app.snooze()
+            elif data == "sitdown" and self.app:
+                self.app.record_completed()
+
+        # Must call completion handler
+        handler()
+
+    @objc.typedSelector(b'v@:@@@?')
+    def userNotificationCenter_willPresentNotification_withCompletionHandler_(self, center, notification, handler):
+        """Always show notifications even when app is active"""
+        handler(UserNotifications.UNNotificationPresentationOptionBanner | UserNotifications.UNNotificationPresentationOptionSound)
+
+
+class PopoverDelegate(objc.lookUpClass('NSObject')):
+    """Helper class to handle popover button clicks"""
+
+    def initWithPopover_leftCallback_rightCallback_(self, popover, left_callback, right_callback):
+        self = objc.super(PopoverDelegate, self).init()
+        if self is None:
+            return None
+        self.popover = popover
+        self.left_callback = left_callback
+        self.right_callback = right_callback
+        return self
+
+    @objc.typedSelector(b'v@:@')
+    def leftButtonClicked_(self, sender):
+        self.popover.close()
+        if self.left_callback:
+            self.left_callback()
+
+    @objc.typedSelector(b'v@:@')
+    def rightButtonClicked_(self, sender):
+        self.popover.close()
+        if self.right_callback:
+            self.right_callback()
 
 def get_icon_path():
     """Get the path to the app icon"""
@@ -46,7 +113,7 @@ class StandUpApp(rumps.App):
         super(StandUpApp, self).__init__("Sit Down. Stand Up", "🧑‍💻")
 
         # Interval presets
-        self.intervals = {"1 minute": 1 * 60, "30 minutes": 30 * 60, "1 hour": 60 * 60}
+        self.intervals = {"1 minute": 1 * 60, "30 minutes": 30 * 60, "60 minutes": 60 * 60}
 
         self.work_duration = 30 * 60  # 30 minutes in seconds (default)
         self.countdown_duration = 5 * 60  # 5 minutes in seconds
@@ -66,7 +133,7 @@ class StandUpApp(rumps.App):
             self.placeholder_item,  # Invisible placeholder
             self.one_minute_item,   # Alternate - replaces placeholder when Option held
             rumps.MenuItem("30 minutes", callback=self.change_interval),
-            rumps.MenuItem("1 hour", callback=self.change_interval),
+            rumps.MenuItem("60 minutes", callback=self.change_interval),
         ]
 
         # Set default checkmark on 30 minutes (index 2 now)
@@ -91,8 +158,41 @@ class StandUpApp(rumps.App):
         self.dev_menu_items = [
             rumps.MenuItem("Trigger Stand up", callback=self.dev_trigger_standup),
             rumps.MenuItem("Trigger Sit down", callback=self.dev_trigger_sitdown),
+            rumps.MenuItem("Notification Settings...", callback=self.dev_notification_settings),
+            rumps.separator,
+            rumps.MenuItem("Record Stood Up", callback=lambda _: self.record_completed()),
+            rumps.MenuItem("Record Snoozed", callback=lambda _: self.record_snoozed()),
         ]
         self.dev_menu = ("Dev", self.dev_menu_items)
+
+        # Stats menu - use lambda to keep items enabled but do nothing
+        noop = lambda _: None
+        self.stats_today_header = rumps.MenuItem("Today", callback=noop)
+        self.stats_today_stoodup = rumps.MenuItem("  Stood up: 0", callback=noop)
+        self.stats_today_snoozed = rumps.MenuItem("  Snoozed: 0", callback=noop)
+        self.stats_today_best = rumps.MenuItem("  Best streak: 0", callback=noop)
+        self.stats_alltime_header = rumps.MenuItem("All-time", callback=noop)
+        self.stats_alltime_stoodup = rumps.MenuItem("  Stood up: 0", callback=noop)
+        self.stats_alltime_snoozed = rumps.MenuItem("  Snoozed: 0", callback=noop)
+        self.stats_alltime_best = rumps.MenuItem("  Best streak: 0", callback=noop)
+        self.stats_streak = rumps.MenuItem("Streak: 0 🔥", callback=noop)
+        self.stats_menu_items = [
+            self.stats_streak,
+            rumps.separator,
+            self.stats_today_header,
+            self.stats_today_stoodup,
+            self.stats_today_snoozed,
+            self.stats_today_best,
+            rumps.separator,
+            self.stats_alltime_header,
+            self.stats_alltime_stoodup,
+            self.stats_alltime_snoozed,
+            self.stats_alltime_best,
+        ]
+        self.stats_menu = ("Stats", self.stats_menu_items)
+
+        # Track if we're waiting for user to respond to sit down notification
+        self.pending_sitdown_response = False
 
         # Menu items
         self.menu = [
@@ -101,6 +201,8 @@ class StandUpApp(rumps.App):
             rumps.separator,
             ("Remind me every...", self.interval_menu_items),
             rumps.MenuItem("Reset Reminder", callback=self.reset_timer),
+            rumps.separator,
+            self.stats_menu,
             rumps.separator,
             self.dev_menu_placeholder,
             self.dev_menu,
@@ -136,34 +238,189 @@ class StandUpApp(rumps.App):
             self, 'screenDidWake:', NSWorkspaceScreensDidWakeNotification, None
         )
 
-        self.timer.start()
+        # Set up UNUserNotificationCenter
+        self.notification_delegate = NotificationDelegate.alloc().init()
+        self.notification_delegate.app = self
+        center = UserNotifications.UNUserNotificationCenter.currentNotificationCenter()
+        center.setDelegate_(self.notification_delegate)
 
-    @rumps.notifications
-    def notification_center(self, info):
-        """Handle notification action button clicks"""
-        print(f"Notification clicked! Info: {info}")  # Debug
-        if self.is_countdown:
-            self.snooze()
-
-    def dev_trigger_standup(self, _):
-        """Dev: Trigger stand up notification without affecting timer"""
-        rumps.notification(
-            title="Time to move!",
-            subtitle="",
-            message=random.choice(STANDUP_MESSAGES),
-            sound=False,
-            action_button="Snooze",
-            icon=ICON_PATH,
+        # Request notification permissions
+        center.requestAuthorizationWithOptions_completionHandler_(
+            UserNotifications.UNAuthorizationOptionAlert | UserNotifications.UNAuthorizationOptionSound,
+            lambda granted, error: None
         )
 
+        # Set up notification categories with actions
+        snooze_action = UserNotifications.UNNotificationAction.actionWithIdentifier_title_options_(
+            "snooze", "Snooze", 0
+        )
+        standup_category = UserNotifications.UNNotificationCategory.categoryWithIdentifier_actions_intentIdentifiers_options_(
+            "standup", [snooze_action], [], 0
+        )
+
+        moved_action = UserNotifications.UNNotificationAction.actionWithIdentifier_title_options_(
+            "moved", "Yep!", 0
+        )
+        sitdown_category = UserNotifications.UNNotificationCategory.categoryWithIdentifier_actions_intentIdentifiers_options_(
+            "sitdown", [moved_action], [], 0
+        )
+
+        center.setNotificationCategories_({standup_category, sitdown_category})
+
+        # Show notification settings prompt on first run
+        self.check_first_run()
+
+        # Initialize stats menu
+        self.update_stats_menu()
+
+        self.timer.start()
+
+    def check_first_run(self):
+        """Check if this is the first run and show notification settings prompt"""
+        try:
+            with open(self.config_path, "r") as f:
+                config = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            config = {}
+
+        if not config.get("notification_prompt_shown"):
+            self.show_notification_settings_prompt()
+            config["notification_prompt_shown"] = True
+            with open(self.config_path, "w") as f:
+                json.dump(config, f)
+
+    def dev_trigger_standup(self, _):
+        """Dev: Trigger stand up notification"""
+        self.show_standup_notification()
+
     def dev_trigger_sitdown(self, _):
-        """Dev: Trigger sit down notification without affecting timer"""
-        rumps.notification(
-            title="You can sit down again",
-            subtitle="",
-            message=f"See you in {self.current_interval}.",
-            sound=False,
-            icon=ICON_PATH,
+        """Dev: Trigger sit down notification"""
+        self.show_sitdown_notification()
+
+    def show_standup_notification(self):
+        """Show the stand up notification with streak message if applicable"""
+        stats = self.load_stats()
+        streak = stats.get("streak", 0)
+        if streak >= 1:
+            message = f"🔥 {streak} moves and counting. Keep going!"
+        else:
+            message = random.choice(STANDUP_MESSAGES)
+
+        content = UserNotifications.UNMutableNotificationContent.alloc().init()
+        content.setTitle_("Time to move!")
+        content.setBody_(message)
+        content.setCategoryIdentifier_("standup")
+        content.setUserInfo_({"data": "standup"})
+
+        request = UserNotifications.UNNotificationRequest.requestWithIdentifier_content_trigger_(
+            f"standup-{time_module.time()}", content, None
+        )
+        UserNotifications.UNUserNotificationCenter.currentNotificationCenter().addNotificationRequest_withCompletionHandler_(
+            request, lambda error: None
+        )
+
+    def show_sitdown_notification(self):
+        """Show the sit down notification"""
+        self.pending_sitdown_response = True
+
+        content = UserNotifications.UNMutableNotificationContent.alloc().init()
+        content.setTitle_("You can sit down again")
+        content.setBody_("Did you move?")
+        content.setCategoryIdentifier_("sitdown")
+        content.setUserInfo_({"data": "sitdown"})
+
+        request = UserNotifications.UNNotificationRequest.requestWithIdentifier_content_trigger_(
+            f"sitdown-{time_module.time()}", content, None
+        )
+        UserNotifications.UNUserNotificationCenter.currentNotificationCenter().addNotificationRequest_withCompletionHandler_(
+            request, lambda error: None
+        )
+
+    def dev_notification_settings(self, _):
+        """Dev: Show notification settings prompt"""
+        self.show_notification_settings_prompt()
+
+    def show_notification_settings_prompt(self):
+        """Show popover prompt to configure notification settings"""
+        popover_width = 320
+        popover_height = 280
+
+        # Create the popover
+        self.popover = NSPopover.alloc().init()
+        self.popover.setBehavior_(NSPopoverBehaviorTransient)
+
+        # Create content view
+        content = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, popover_width, popover_height))
+
+        # App icon (32px padding above: 280 - 32 - 64 = 184)
+        icon_size = 64
+        icon_view = NSImageView.alloc().initWithFrame_(
+            NSMakeRect((popover_width - icon_size) / 2, 184, icon_size, icon_size)
+        )
+        icon_image = NSImage.alloc().initWithContentsOfFile_(ICON_PATH)
+        icon_view.setImage_(icon_image)
+        icon_view.setImageScaling_(NSImageScaleProportionallyUpOrDown)
+        content.addSubview_(icon_view)
+
+        # Title label (16px below icon: 184 - 16 - 25 = 143)
+        title = NSTextField.alloc().initWithFrame_(NSMakeRect(15, 143, popover_width - 30, 25))
+        title.setStringValue_("Welcome to Sit Down. Stand Up")
+        title.setBezeled_(False)
+        title.setDrawsBackground_(False)
+        title.setEditable_(False)
+        title.setSelectable_(False)
+        title.setFont_(NSFont.boldSystemFontOfSize_(14))
+        title.setAlignment_(NSTextAlignmentCenter)
+        content.addSubview_(title)
+
+        # Message label
+        message = NSTextField.alloc().initWithFrame_(NSMakeRect(15, 50, popover_width - 30, 88))
+        message.setStringValue_("This app reminds you to stand up for 5 minutes, every 30 minutes.\n\nTo keep notifications visible, open Settings and change the style to 'Alerts'.")
+        message.setBezeled_(False)
+        message.setDrawsBackground_(False)
+        message.setEditable_(False)
+        message.setSelectable_(False)
+        message.setFont_(NSFont.systemFontOfSize_(12))
+        message.setAlignment_(NSTextAlignmentCenter)
+        message.cell().setWraps_(True)
+        message.cell().setLineBreakMode_(NSLineBreakByWordWrapping)
+        content.addSubview_(message)
+
+        # Create delegate for button callbacks
+        def open_settings():
+            os.system('open "x-apple.systempreferences:com.apple.Notifications-Settings"')
+
+        self.popover_delegate = PopoverDelegate.alloc().initWithPopover_leftCallback_rightCallback_(
+            self.popover, None, open_settings
+        )
+
+        # Skip button
+        skip_btn = NSButton.alloc().initWithFrame_(NSMakeRect(15, 15, 80, 28))
+        skip_btn.setTitle_("Skip")
+        skip_btn.setBezelStyle_(NSBezelStyleRounded)
+        skip_btn.setTarget_(self.popover_delegate)
+        skip_btn.setAction_(objc.selector(self.popover_delegate.leftButtonClicked_, signature=b'v@:@'))
+        content.addSubview_(skip_btn)
+
+        # Open Settings button
+        settings_btn = NSButton.alloc().initWithFrame_(NSMakeRect(popover_width - 130, 15, 115, 28))
+        settings_btn.setTitle_("Open Settings")
+        settings_btn.setBezelStyle_(NSBezelStyleRounded)
+        settings_btn.setTarget_(self.popover_delegate)
+        settings_btn.setAction_(objc.selector(self.popover_delegate.rightButtonClicked_, signature=b'v@:@'))
+        settings_btn.setKeyEquivalent_("\r")  # Enter key
+        content.addSubview_(settings_btn)
+
+        # Create view controller and set content
+        vc = NSViewController.alloc().init()
+        vc.setView_(content)
+        self.popover.setContentViewController_(vc)
+        self.popover.setContentSize_(content.frame().size)
+
+        # Get the status item button from rumps and show popover
+        status_button = self._nsapp.nsstatusitem.button()
+        self.popover.showRelativeToRect_ofView_preferredEdge_(
+            status_button.bounds(), status_button, NSMinYEdge
         )
 
     def screenDidSleep_(self, notification):
@@ -186,6 +443,104 @@ class StandUpApp(rumps.App):
         config_dir = os.path.expanduser("~/.config/standup_reminder")
         os.makedirs(config_dir, exist_ok=True)
         return os.path.join(config_dir, "config.json")
+
+    @property
+    def stats_path(self):
+        """Get the path to the stats file"""
+        config_dir = os.path.expanduser("~/.config/standup_reminder")
+        os.makedirs(config_dir, exist_ok=True)
+        return os.path.join(config_dir, "stats.json")
+
+    def load_stats(self):
+        """Load stats from file"""
+        try:
+            with open(self.stats_path, "r") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {"days": {}}
+
+    def save_stats(self, stats):
+        """Save stats to file"""
+        with open(self.stats_path, "w") as f:
+            json.dump(stats, f, indent=2)
+
+    def update_stats_menu(self):
+        """Update the stats menu with current values"""
+        stats = self.load_stats()
+        today = time_module.strftime("%Y-%m-%d")
+
+        # Streak
+        streak = stats.get("streak", 0)
+        self.stats_streak.title = f"Streak: {streak} 🔥"
+
+        # Today's stats
+        today_stats = stats["days"].get(today, {"completed": 0, "snoozed": 0, "best_streak": 0})
+        self.stats_today_stoodup.title = f"  Stood up: {today_stats.get('completed', 0)}"
+        self.stats_today_snoozed.title = f"  Snoozed: {today_stats.get('snoozed', 0)}"
+        self.stats_today_best.title = f"  Best streak: {today_stats.get('best_streak', 0)}"
+
+        # All-time stats
+        total_stoodup = 0
+        total_snoozed = 0
+        for day_stats in stats["days"].values():
+            total_stoodup += day_stats.get("completed", 0)
+            total_snoozed += day_stats.get("snoozed", 0)
+
+        self.stats_alltime_stoodup.title = f"  Stood up: {total_stoodup}"
+        self.stats_alltime_snoozed.title = f"  Snoozed: {total_snoozed}"
+        self.stats_alltime_best.title = f"  Best streak: {stats.get('best_streak', 0)}"
+
+    def record_prompt(self):
+        """Record that a stand up prompt was shown"""
+        today = time_module.strftime("%Y-%m-%d")
+        stats = self.load_stats()
+        if today not in stats["days"]:
+            stats["days"][today] = {"prompts": 0, "completed": 0, "snoozed": 0}
+        if "snoozed" not in stats["days"][today]:
+            stats["days"][today]["snoozed"] = 0
+        stats["days"][today]["prompts"] += 1
+        self.save_stats(stats)
+        self.update_stats_menu()
+
+    def record_completed(self):
+        """Record that user confirmed they moved"""
+        today = time_module.strftime("%Y-%m-%d")
+        stats = self.load_stats()
+        if today not in stats["days"]:
+            stats["days"][today] = {"prompts": 0, "completed": 0, "snoozed": 0, "best_streak": 0}
+        if "snoozed" not in stats["days"][today]:
+            stats["days"][today]["snoozed"] = 0
+        if "best_streak" not in stats["days"][today]:
+            stats["days"][today]["best_streak"] = 0
+        stats["days"][today]["completed"] += 1
+
+        # Increment streak
+        stats["streak"] = stats.get("streak", 0) + 1
+        current_streak = stats["streak"]
+
+        # Update today's best streak if current is higher
+        if current_streak > stats["days"][today]["best_streak"]:
+            stats["days"][today]["best_streak"] = current_streak
+
+        # Update all-time best streak if current is higher
+        if current_streak > stats.get("best_streak", 0):
+            stats["best_streak"] = current_streak
+
+        self.save_stats(stats)
+        self.pending_sitdown_response = False
+        self.update_stats_menu()
+
+    def record_snoozed(self):
+        """Record that user snoozed"""
+        today = time_module.strftime("%Y-%m-%d")
+        stats = self.load_stats()
+        if today not in stats["days"]:
+            stats["days"][today] = {"prompts": 0, "completed": 0, "snoozed": 0}
+        if "snoozed" not in stats["days"][today]:
+            stats["days"][today]["snoozed"] = 0
+        stats["days"][today]["snoozed"] += 1
+        self.save_stats(stats)
+        self.update_stats_menu()
 
     def load_config(self):
         """Load saved settings from config file"""
@@ -239,16 +594,7 @@ class StandUpApp(rumps.App):
         self.title = "🕺"  # Standing person emoji
         self.snooze_menu_item._menuitem.setHidden_(False)  # Show snooze menu
 
-        # Show notification with Snooze button
-        rumps.notification(
-            title="Time to move!",
-            subtitle="",
-            message=random.choice(STANDUP_MESSAGES),
-            sound=False,
-            action_button="Snooze",
-            icon=ICON_PATH,
-        )
-
+        self.show_standup_notification()
         self.update_display()
 
     def snooze_clicked(self, _):
@@ -263,6 +609,9 @@ class StandUpApp(rumps.App):
         self.title = "😴"
         self.snooze_menu_item._menuitem.setHidden_(True)  # Hide snooze menu
 
+        # Record that user snoozed
+        self.record_snoozed()
+
         self.update_display()
 
     def restart_work_timer(self):
@@ -273,15 +622,17 @@ class StandUpApp(rumps.App):
         self.title = "🧑‍💻"  # Chair emoji
         self.snooze_menu_item._menuitem.setHidden_(True)  # Hide snooze menu
 
-        # Show notification
-        rumps.notification(
-            title="You can sit down again",
-            subtitle="",
-            message=f"See you in {self.current_interval} minutes.",
-            sound=False,
-            icon=ICON_PATH,
-        )
+        # If user didn't respond to previous sit down notification, reset streak
+        if self.pending_sitdown_response:
+            stats = self.load_stats()
+            stats["streak"] = 0
+            self.save_stats(stats)
+            self.update_stats_menu()
 
+        # Record that we prompted the user
+        self.record_prompt()
+
+        self.show_sitdown_notification()
         self.update_display()
 
     def update_display(self):

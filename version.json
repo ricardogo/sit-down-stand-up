@@ -1,5 +1,5 @@
 {
-  "version": "1.5.0",
-  "download_url": "https://github.com/ricardogo/sit-down-stand-up/releases/download/v1.5.0/SitDown.StandUp.app.zip",
-  "notes": "New app icon, improved notifications"
+  "version": "1.6.0",
+  "download_url": "https://github.com/ricardogo/sit-down-stand-up/releases/download/v1.6.0/SitDown.StandUp.app.zip",
+  "notes": "Stats tracking, streak counter, interactive notification buttons"
 }
