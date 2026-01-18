@@ -1,5 +1,5 @@
 {
-  "version": "1.7.1",
-  "download_url": "https://github.com/ricardogo/sit-down-stand-up/releases/download/v1.7.1/SitDown.StandUp.app.zip",
-  "notes": "Fixed update flow - downloads to Downloads folder for manual install"
+  "version": "1.7.2",
+  "download_url": "https://github.com/ricardogo/sit-down-stand-up/releases/download/v1.7.2/SitDown.StandUp.app.zip",
+  "notes": "Added Stop/Restart functionality to pause and resume the timer"
 }

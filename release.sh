@@ -16,7 +16,7 @@ echo "==> Releasing v$VERSION"
 
 # Update version in files
 echo "==> Updating version numbers..."
-sed -i '' "s/VERSION = \".*\"/VERSION = \"$VERSION\"/" standup_reminder.py
+sed -i '' "s/^VERSION = \".*\"/VERSION = \"$VERSION\"/" standup_reminder.py
 sed -i '' "s/'CFBundleVersion': \".*\"/'CFBundleVersion': \"$VERSION\"/" setup.py
 sed -i '' "s/'CFBundleShortVersionString': \".*\"/'CFBundleShortVersionString': \"$VERSION\"/" setup.py
 

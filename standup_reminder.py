@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import time as time_module
 import uuid
+import threading
 from posthog import Posthog
 from AppKit import (
     NSAlternateKeyMask, NSWorkspace, NSWorkspaceScreensDidSleepNotification,
@@ -25,7 +26,7 @@ from Foundation import NSNotificationCenter
 import objc
 import UserNotifications
 
-VERSION = "1.7.1"
+VERSION = "1.7.2"
 SNOOZE_DURATION = 5 * 60  # 5 minutes in seconds
 
 # PostHog analytics
@@ -112,6 +113,7 @@ STANDUP_MESSAGES = [
     "Do 20 jumping jacks!",
     "Walk around the block.",
     "Stretch for 5 minutes.",
+    "Walk your dog.",
     "Climb some stairs (if you have 'em).",
     "Can't move right now? Stand up for a while.",
 ]
@@ -165,6 +167,10 @@ class StandUpApp(rumps.App):
         self.snooze_menu_item = rumps.MenuItem("Snooze", callback=self.snooze_clicked)
         self.snooze_menu_item._menuitem.setHidden_(True)  # Initially hidden
 
+        # Stop/Restart menu item
+        self.is_paused = False
+        self.pause_menu_item = rumps.MenuItem("Stop", callback=self.toggle_pause)
+
         # Dev menu (hidden, shown with Option key)
         self.dev_menu_placeholder = rumps.MenuItem("")
         self.dev_menu_items = [
@@ -212,9 +218,9 @@ class StandUpApp(rumps.App):
         self.menu = [
             self.timer_menu_item,
             self.snooze_menu_item,
+            self.pause_menu_item,
             rumps.separator,
             ("Remind me every...", self.interval_menu_items),
-            rumps.MenuItem("Reset Reminder", callback=self.reset_timer),
             rumps.separator,
             self.stats_menu,
             rumps.separator,
@@ -317,7 +323,7 @@ class StandUpApp(rumps.App):
     def dev_fake_old_version(self, _):
         """Dev: Fake old version to test updates"""
         global VERSION
-        VERSION = "1.7.1"
+        VERSION = "1.0.0"
         rumps.alert("Version set to 1.0.0", "Now use 'Check for Updates...' to test the update flow.")
 
     def show_standup_notification(self):
@@ -335,12 +341,20 @@ class StandUpApp(rumps.App):
         content.setCategoryIdentifier_("standup")
         content.setUserInfo_({"data": "standup"})
 
+        notification_id = f"standup-{time_module.time()}"
         request = UserNotifications.UNNotificationRequest.requestWithIdentifier_content_trigger_(
-            f"standup-{time_module.time()}", content, None
+            notification_id, content, None
         )
         UserNotifications.UNUserNotificationCenter.currentNotificationCenter().addNotificationRequest_withCompletionHandler_(
             request, lambda error: None
         )
+
+        # Auto-dismiss after 10 seconds
+        def remove_notification():
+            time_module.sleep(10)
+            UserNotifications.UNUserNotificationCenter.currentNotificationCenter().removeDeliveredNotificationsWithIdentifiers_([notification_id])
+
+        threading.Thread(target=remove_notification, daemon=True).start()
 
     def show_sitdown_notification(self):
         """Show the sit down notification"""
@@ -533,7 +547,7 @@ class StandUpApp(rumps.App):
 
         # Streak
         streak = stats.get("streak", 0)
-        self.stats_streak.title = f"Streak: {streak} 🔥"
+        self.stats_streak.title = f"Current streak: {streak} 🔥"
 
         # Today's stats
         today_stats = stats["days"].get(today, {"completed": 0, "snoozed": 0, "best_streak": 0})
@@ -692,6 +706,28 @@ class StandUpApp(rumps.App):
         self.record_snoozed()
 
         self.update_display()
+
+    def toggle_pause(self, _):
+        """Toggle between paused and running states"""
+        if self.is_paused:
+            # Resume - restart timer from scratch
+            self.is_paused = False
+            self.is_countdown = False
+            self.is_snooze = False
+            self.time_remaining = self.work_duration
+            self.title = "🧑‍💻"
+            self.snooze_menu_item._menuitem.setHidden_(True)
+            self.pause_menu_item.title = "Stop"
+            self.timer.start()
+            self.update_display()
+        else:
+            # Pause
+            self.is_paused = True
+            self.timer.stop()
+            self.title = "⏹️"
+            self.snooze_menu_item._menuitem.setHidden_(True)
+            self.pause_menu_item.title = "Restart"
+            self.timer_menu_item.title = "Stopped"
 
     def restart_work_timer(self):
         """Restart the work timer after countdown"""
