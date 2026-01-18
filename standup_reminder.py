@@ -15,8 +15,19 @@ import time as time_module
 from AppKit import NSAlternateKeyMask, NSWorkspace, NSWorkspaceScreensDidSleepNotification, NSWorkspaceScreensDidWakeNotification
 from Foundation import NSNotificationCenter
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 SNOOZE_DURATION = 5 * 60  # 5 minutes in seconds
+
+def get_icon_path():
+    """Get the path to the app icon"""
+    # When running as app bundle, icon is in Resources
+    bundle_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if bundle_path.endswith('.app/Contents'):
+        return os.path.join(bundle_path, 'Resources', 'icon.icns')
+    # When running from source
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'icon.png')
+
+ICON_PATH = get_icon_path()
 STANDUP_MESSAGES = [
     "Stand up, stretch, and move around for 5 minutes.",
     "Do 20 jumping jacks!",
@@ -142,7 +153,7 @@ class StandUpApp(rumps.App):
             message=random.choice(STANDUP_MESSAGES),
             sound=False,
             action_button="Snooze",
-            icon=None,
+            icon=ICON_PATH,
         )
 
     def dev_trigger_sitdown(self, _):
@@ -152,7 +163,7 @@ class StandUpApp(rumps.App):
             subtitle="",
             message=f"See you in {self.current_interval}.",
             sound=False,
-            icon=None,
+            icon=ICON_PATH,
         )
 
     def screenDidSleep_(self, notification):
@@ -235,7 +246,7 @@ class StandUpApp(rumps.App):
             message=random.choice(STANDUP_MESSAGES),
             sound=False,
             action_button="Snooze",
-            icon=None,
+            icon=ICON_PATH,
         )
 
         self.update_display()
@@ -268,7 +279,7 @@ class StandUpApp(rumps.App):
             subtitle="",
             message=f"See you in {self.current_interval} minutes.",
             sound=False,
-            icon=None,
+            icon=ICON_PATH,
         )
 
         self.update_display()
@@ -284,7 +295,7 @@ class StandUpApp(rumps.App):
             else:
                 time_str = f"{minutes}m"
             self.title = f"🕺 {time_str}"
-            self.timer_menu_item.title = f"Stand up time: {time_str}"
+            self.timer_menu_item.title = f"Move around for: {time_str}"
         elif self.is_snooze:
             # Snooze mode - show sleep emoji
             self.title = "😴"
@@ -292,7 +303,7 @@ class StandUpApp(rumps.App):
         else:
             # Normal sit down mode
             self.title = "🧑‍💻"
-            self.timer_menu_item.title = f"Time until standing up: {minutes}m"
+            self.timer_menu_item.title = f"Standing up in: {minutes}m"
 
     def reset_timer(self, sender):
         """Reset the timer to start over"""
@@ -421,7 +432,7 @@ class StandUpApp(rumps.App):
                 subtitle="",
                 message="Please wait...",
                 sound=False,
-                icon=None,
+                icon=ICON_PATH,
             )
 
             urllib.request.urlretrieve(download_url, zip_path)
