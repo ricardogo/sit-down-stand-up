@@ -12,6 +12,8 @@ import zipfile
 import shutil
 import subprocess
 import time as time_module
+import uuid
+from posthog import Posthog
 from AppKit import (
     NSAlternateKeyMask, NSWorkspace, NSWorkspaceScreensDidSleepNotification,
     NSWorkspaceScreensDidWakeNotification, NSView, NSTextField, NSButton,
@@ -23,8 +25,14 @@ from Foundation import NSNotificationCenter
 import objc
 import UserNotifications
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 SNOOZE_DURATION = 5 * 60  # 5 minutes in seconds
+
+# PostHog analytics
+posthog = Posthog(
+    project_api_key='phc_waWKd8uTCu5RJa0ElmxORrfRdbufIQtFSsbz55JL5GX',
+    host='https://eu.i.posthog.com'
+)
 
 
 class NotificationDelegate(objc.lookUpClass('NSObject')):
@@ -51,6 +59,10 @@ class NotificationDelegate(objc.lookUpClass('NSObject')):
                 self.app.snooze()
             elif data == "sitdown" and self.app:
                 self.app.record_completed()
+        elif action == UserNotifications.UNNotificationDismissActionIdentifier:
+            # User dismissed the notification
+            if data == "sitdown" and self.app:
+                self.app.clear_streak()
 
         # Must call completion handler
         handler()
@@ -275,6 +287,9 @@ class StandUpApp(rumps.App):
 
         self.timer.start()
 
+        # Track app opened
+        self.track("app_opened", {"version": VERSION})
+
     def check_first_run(self):
         """Check if this is the first run and show notification settings prompt"""
         try:
@@ -342,8 +357,8 @@ class StandUpApp(rumps.App):
 
     def show_notification_settings_prompt(self):
         """Show popover prompt to configure notification settings"""
-        popover_width = 320
-        popover_height = 280
+        popover_width = 350
+        popover_height = 388
 
         # Create the popover
         self.popover = NSPopover.alloc().init()
@@ -352,18 +367,21 @@ class StandUpApp(rumps.App):
         # Create content view
         content = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, popover_width, popover_height))
 
-        # App icon (32px padding above: 280 - 32 - 64 = 184)
-        icon_size = 64
+        # App icon (32px padding above)
+        icon_size = 128
+        icon_y = popover_height - 32 - icon_size
         icon_view = NSImageView.alloc().initWithFrame_(
-            NSMakeRect((popover_width - icon_size) / 2, 184, icon_size, icon_size)
+            NSMakeRect((popover_width - icon_size) / 2, icon_y, icon_size, icon_size)
         )
         icon_image = NSImage.alloc().initWithContentsOfFile_(ICON_PATH)
         icon_view.setImage_(icon_image)
         icon_view.setImageScaling_(NSImageScaleProportionallyUpOrDown)
         content.addSubview_(icon_view)
 
-        # Title label (16px below icon: 184 - 16 - 25 = 143)
-        title = NSTextField.alloc().initWithFrame_(NSMakeRect(15, 143, popover_width - 30, 25))
+        # Title label (16px below icon)
+        title_height = 25
+        title_y = icon_y - 16 - title_height
+        title = NSTextField.alloc().initWithFrame_(NSMakeRect(15, title_y, popover_width - 30, title_height))
         title.setStringValue_("Welcome to Sit Down. Stand Up")
         title.setBezeled_(False)
         title.setDrawsBackground_(False)
@@ -373,9 +391,11 @@ class StandUpApp(rumps.App):
         title.setAlignment_(NSTextAlignmentCenter)
         content.addSubview_(title)
 
-        # Message label
-        message = NSTextField.alloc().initWithFrame_(NSMakeRect(15, 50, popover_width - 30, 88))
-        message.setStringValue_("This app reminds you to stand up for 5 minutes, every 30 minutes.\n\nTo keep notifications visible, open Settings and change the style to 'Alerts'.")
+        # Message label (fills space between title and buttons)
+        message_y = 55
+        message_height = title_y - 8 - message_y
+        message = NSTextField.alloc().initWithFrame_(NSMakeRect(15, message_y, popover_width - 30, message_height))
+        message.setStringValue_("🔔 Be notified to stand up for 5 minutes, every 30 minutes, and improve your health.\n\n🔥 Log each time you stand, and build up a streak.\n\n👉 For the best experience, 'Open Settings', find this app and change the banner style to 'Alerts'.")
         message.setBezeled_(False)
         message.setDrawsBackground_(False)
         message.setEditable_(False)
@@ -394,8 +414,15 @@ class StandUpApp(rumps.App):
             self.popover, None, open_settings
         )
 
+        # Center buttons horizontally with gap
+        skip_width = 80
+        settings_width = 115
+        gap = 0
+        total_width = skip_width + gap + settings_width
+        start_x = (popover_width - total_width) / 2
+
         # Skip button
-        skip_btn = NSButton.alloc().initWithFrame_(NSMakeRect(15, 15, 80, 28))
+        skip_btn = NSButton.alloc().initWithFrame_(NSMakeRect(start_x, 15, skip_width, 28))
         skip_btn.setTitle_("Skip")
         skip_btn.setBezelStyle_(NSBezelStyleRounded)
         skip_btn.setTarget_(self.popover_delegate)
@@ -403,7 +430,7 @@ class StandUpApp(rumps.App):
         content.addSubview_(skip_btn)
 
         # Open Settings button
-        settings_btn = NSButton.alloc().initWithFrame_(NSMakeRect(popover_width - 130, 15, 115, 28))
+        settings_btn = NSButton.alloc().initWithFrame_(NSMakeRect(start_x + skip_width + gap, 15, settings_width, 28))
         settings_btn.setTitle_("Open Settings")
         settings_btn.setBezelStyle_(NSBezelStyleRounded)
         settings_btn.setTarget_(self.popover_delegate)
@@ -450,6 +477,33 @@ class StandUpApp(rumps.App):
         config_dir = os.path.expanduser("~/.config/standup_reminder")
         os.makedirs(config_dir, exist_ok=True)
         return os.path.join(config_dir, "stats.json")
+
+    def get_user_id(self):
+        """Get or create a unique user ID for analytics"""
+        try:
+            with open(self.config_path, "r") as f:
+                config = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            config = {}
+
+        if "user_id" not in config:
+            config["user_id"] = str(uuid.uuid4())
+            with open(self.config_path, "w") as f:
+                json.dump(config, f)
+
+        return config["user_id"]
+
+    def track(self, event, properties=None):
+        """Track an event with PostHog"""
+        try:
+            posthog.capture(
+                distinct_id=self.get_user_id(),
+                event=event,
+                properties=properties or {}
+            )
+            posthog.flush()
+        except Exception:
+            pass  # Silently fail if tracking fails
 
     def load_stats(self):
         """Load stats from file"""
@@ -530,6 +584,9 @@ class StandUpApp(rumps.App):
         self.pending_sitdown_response = False
         self.update_stats_menu()
 
+        # Track stood up event
+        self.track("stood_up", {"streak": current_streak})
+
     def record_snoozed(self):
         """Record that user snoozed"""
         today = time_module.strftime("%Y-%m-%d")
@@ -541,6 +598,20 @@ class StandUpApp(rumps.App):
         stats["days"][today]["snoozed"] += 1
         self.save_stats(stats)
         self.update_stats_menu()
+
+        # Track snoozed event
+        self.track("snoozed")
+
+    def clear_streak(self):
+        """Clear the current streak"""
+        stats = self.load_stats()
+        stats["streak"] = 0
+        self.save_stats(stats)
+        self.pending_sitdown_response = False
+        self.update_stats_menu()
+
+        # Track sit down dismissed event
+        self.track("sit_down_dismissed")
 
     def load_config(self):
         """Load saved settings from config file"""
