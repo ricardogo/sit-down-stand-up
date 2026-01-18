@@ -25,7 +25,7 @@ from Foundation import NSNotificationCenter
 import objc
 import UserNotifications
 
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 SNOOZE_DURATION = 5 * 60  # 5 minutes in seconds
 
 # PostHog analytics
@@ -174,6 +174,8 @@ class StandUpApp(rumps.App):
             rumps.separator,
             rumps.MenuItem("Record Stood Up", callback=lambda _: self.record_completed()),
             rumps.MenuItem("Record Snoozed", callback=lambda _: self.record_snoozed()),
+            rumps.separator,
+            rumps.MenuItem("Fake Old Version (1.0.0)", callback=self.dev_fake_old_version),
         ]
         self.dev_menu = ("Dev", self.dev_menu_items)
 
@@ -311,6 +313,12 @@ class StandUpApp(rumps.App):
     def dev_trigger_sitdown(self, _):
         """Dev: Trigger sit down notification"""
         self.show_sitdown_notification()
+
+    def dev_fake_old_version(self, _):
+        """Dev: Fake old version to test updates"""
+        global VERSION
+        VERSION = "1.7.1"
+        rumps.alert("Version set to 1.0.0", "Now use 'Check for Updates...' to test the update flow.")
 
     def show_standup_notification(self):
         """Show the stand up notification with streak message if applicable"""
@@ -831,68 +839,43 @@ class StandUpApp(rumps.App):
         return 0
 
     def _download_and_install_update(self, download_url):
-        """Download and install the update"""
+        """Download the update and open in Finder for manual install"""
         try:
-            # Get the current app path
-            app_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            if not app_path.endswith(".app"):
-                # Running from source, not packaged app
-                rumps.alert(
-                    title="Update Error",
-                    message="Cannot auto-update when running from source. Please download manually.",
-                    ok="OK",
-                )
-                return
-
-            # Download to temp location
-            temp_dir = os.path.join(os.path.expanduser("~"), ".config", "standup_reminder", "update_temp")
-            os.makedirs(temp_dir, exist_ok=True)
-            zip_path = os.path.join(temp_dir, "update.zip")
+            # Download to Downloads folder
+            downloads_dir = os.path.expanduser("~/Downloads")
+            zip_path = os.path.join(downloads_dir, "SitDown.StandUp.app.zip")
 
             rumps.notification(
                 title="Downloading Update",
                 subtitle="",
                 message="Please wait...",
                 sound=False,
-                icon=ICON_PATH,
             )
 
             urllib.request.urlretrieve(download_url, zip_path)
 
             # Extract the zip
+            extract_dir = os.path.join(downloads_dir, "SitDown.StandUp.Update")
+            shutil.rmtree(extract_dir, ignore_errors=True)
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall(temp_dir)
+                zip_ref.extractall(extract_dir)
 
-            # Find the .app in the extracted contents
-            new_app_path = None
-            for item in os.listdir(temp_dir):
-                if item.endswith(".app"):
-                    new_app_path = os.path.join(temp_dir, item)
-                    break
+            # Remove the zip
+            os.remove(zip_path)
 
-            if not new_app_path:
-                raise Exception("Could not find app in downloaded update")
+            # Open the folder in Finder
+            subprocess.run(["open", extract_dir])
 
-            # Create update script that will run after app quits
-            script_path = os.path.join(temp_dir, "update.sh")
-            with open(script_path, "w") as f:
-                f.write(f'''#!/bin/bash
-sleep 2
-rm -rf "{app_path}"
-mv "{new_app_path}" "{app_path}"
-open "{app_path}"
-rm -rf "{temp_dir}"
-''')
-            os.chmod(script_path, 0o755)
-
-            # Run the update script and quit
-            subprocess.Popen([script_path], start_new_session=True)
-            rumps.quit_application()
+            rumps.alert(
+                title="Update Downloaded",
+                message="The new version is in your Downloads folder.\n\nTo install:\n1. Drag the app to Applications\n2. Right-click → Open\n3. Click 'Open' to approve",
+                ok="OK",
+            )
 
         except Exception as e:
             rumps.alert(
                 title="Update Failed",
-                message=f"Could not install update: {str(e)}",
+                message=f"Could not download update: {str(e)}",
                 ok="OK",
             )
 
