@@ -38,10 +38,10 @@ echo "==> Building..."
 rm -rf build dist
 python3 setup.py py2app
 
-# Create zip
+# Create zip (using ditto to preserve symlinks and macOS metadata)
 echo "==> Creating zip..."
 cd dist
-zip -r SitDown.StandUp.app.zip "Sit Down. Stand Up.app"
+ditto -c -k --sequesterRsrc --keepParent "Sit Down. Stand Up.app" SitDown.StandUp.app.zip
 cd ..
 
 # Commit and tag

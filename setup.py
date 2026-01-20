@@ -13,8 +13,8 @@ OPTIONS = {
         'CFBundleDisplayName': 'Sit Down. Stand Up',
         'CFBundleGetInfoString': "Reminds you to stand up at regular intervals",
         'CFBundleIdentifier': "com.sitdown.standup",
-        'CFBundleVersion': "1.7.2",
-        'CFBundleShortVersionString': "1.7.2",
+        'CFBundleVersion': "1.7.3",
+        'CFBundleShortVersionString': "1.7.3",
         'NSHumanReadableCopyright': "Copyright © 2026",
         'LSUIElement': True,  # Set to False to show in Dock, True to hide
     },

@@ -26,7 +26,7 @@ from Foundation import NSNotificationCenter
 import objc
 import UserNotifications
 
-VERSION = "1.7.2"
+VERSION = "1.7.3"
 SNOOZE_DURATION = 5 * 60  # 5 minutes in seconds
 
 # PostHog analytics
@@ -264,9 +264,9 @@ class StandUpApp(rumps.App):
         center = UserNotifications.UNUserNotificationCenter.currentNotificationCenter()
         center.setDelegate_(self.notification_delegate)
 
-        # Request notification permissions
+        # Request notification permissions (including time-sensitive)
         center.requestAuthorizationWithOptions_completionHandler_(
-            UserNotifications.UNAuthorizationOptionAlert | UserNotifications.UNAuthorizationOptionSound,
+            UserNotifications.UNAuthorizationOptionAlert | UserNotifications.UNAuthorizationOptionSound | (1 << 5),  # TimeSensitive
             lambda granted, error: None
         )
 
@@ -340,6 +340,7 @@ class StandUpApp(rumps.App):
         content.setBody_(message)
         content.setCategoryIdentifier_("standup")
         content.setUserInfo_({"data": "standup"})
+        content.setInterruptionLevel_(2)  # Time-sensitive
 
         notification_id = f"standup-{time_module.time()}"
         request = UserNotifications.UNNotificationRequest.requestWithIdentifier_content_trigger_(
@@ -365,6 +366,7 @@ class StandUpApp(rumps.App):
         content.setBody_("Did you move?")
         content.setCategoryIdentifier_("sitdown")
         content.setUserInfo_({"data": "sitdown"})
+        content.setInterruptionLevel_(2)  # Time-sensitive
 
         request = UserNotifications.UNNotificationRequest.requestWithIdentifier_content_trigger_(
             f"sitdown-{time_module.time()}", content, None
