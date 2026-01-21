@@ -1,0 +1,110 @@
+resolving 1 targets
+resolving target exe
+resolving target dist
+target Python distribution for aarch64-apple-darwin resolves to: https://github.com/indygreg/python-build-standalone/releases/download/20221220/cpython-3.10.9%2B20221220-aarch64-apple-darwin-pgo-full.tar.zst (sha256=5a4a1128f6aa53a2cf6f748d0632da938cca4656c21688fbc564755ec4cd3519)
+reusing target Python distribution for host execution
+ensuring Rust toolchain 1.66.0 is available
+rustc for aarch64-apple-darwin in /Users/ricardo/Library/Caches/pyoxidizer/rust/1.66.0-aarch64-apple-darwin is up-to-date
+cargo for aarch64-apple-darwin in /Users/ricardo/Library/Caches/pyoxidizer/rust/1.66.0-aarch64-apple-darwin is up-to-date
+rust-std for aarch64-apple-darwin in /Users/ricardo/Library/Caches/pyoxidizer/rust/1.66.0-aarch64-apple-darwin is up-to-date
+     Created binary (application) package
+writing /var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizeraHd9s4/standup_reminder/.cargo/config
+writing /var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizeraHd9s4/standup_reminder/Cargo.lock
+writing /var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizeraHd9s4/standup_reminder/build.rs
+writing /var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizeraHd9s4/standup_reminder/src/main.rs
+writing /var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizeraHd9s4/standup_reminder/pyoxidizer.bzl
+writing /var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizeraHd9s4/standup_reminder/standup_reminder.exe.manifest
+writing /var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizeraHd9s4/standup_reminder/standup_reminder-manifest.rc
+warning: _distutils_hack contains __file__
+warning: asyncio.__main__ contains __file__
+warning: cProfile contains __file__
+warning: distutils.command.sdist contains __file__
+warning: distutils.core contains __file__
+warning: distutils.dist contains __file__
+warning: doctest contains __file__
+warning: encodings contains __file__
+warning: idlelib.browser contains __file__
+warning: idlelib.config contains __file__
+warning: idlelib.help contains __file__
+warning: idlelib.help_about contains __file__
+warning: idlelib.idle contains __file__
+warning: idlelib.pyshell contains __file__
+warning: idlelib.runscript contains __file__
+warning: idlelib.tree contains __file__
+warning: importlib contains __file__
+warning: importlib._bootstrap contains __file__
+warning: importlib._bootstrap_external contains __file__
+warning: importlib.abc contains __file__
+warning: inspect contains __file__
+warning: lib2to3.pygram contains __file__
+warning: logging contains __file__
+warning: logging.handlers contains __file__
+warning: modulefinder contains __file__
+warning: multiprocessing.spawn contains __file__
+warning: pdb contains __file__
+warning: pip.__main__ contains __file__
+warning: pip.__pip-runner__ contains __file__
+warning: pip._internal.build_env contains __file__
+warning: pip._internal.commands.debug contains __file__
+warning: pip._internal.utils.misc contains __file__
+warning: pip._internal.utils.setuptools_build contains __file__
+warning: pip._internal.utils.virtualenv contains __file__
+warning: pip._vendor contains __file__
+warning: pip._vendor.certifi.core contains __file__
+warning: pip._vendor.distlib.resources contains __file__
+warning: pip._vendor.pep517.in_process contains __file__
+warning: pip._vendor.pep517.in_process._in_process contains __file__
+warning: pip._vendor.pkg_resources contains __file__
+warning: pip._vendor.pygments.lexers.python contains __file__
+warning: pip._vendor.pygments.sphinxext contains __file__
+warning: pip._vendor.pygments.unistring contains __file__
+warning: pip._vendor.rich.pretty contains __file__
+warning: pip._vendor.rich.traceback contains __file__
+warning: pkg_resources contains __file__
+warning: pkgutil contains __file__
+warning: profile contains __file__
+warning: pyclbr contains __file__
+warning: pydoc contains __file__
+warning: pydoc_data.topics contains __file__
+warning: runpy contains __file__
+warning: setuptools._distutils.command.sdist contains __file__
+warning: setuptools._distutils.core contains __file__
+warning: setuptools._distutils.dist contains __file__
+warning: setuptools.build_meta contains __file__
+warning: setuptools.command.bdist_egg contains __file__
+warning: setuptools.command.build_ext contains __file__
+warning: setuptools.command.py36compat contains __file__
+warning: setuptools.command.setopt contains __file__
+warning: setuptools.launch contains __file__
+warning: setuptools.sandbox contains __file__
+warning: site contains __file__
+warning: trace contains __file__
+warning: turtle contains __file__
+warning: turtledemo.__main__ contains __file__
+warning: unittest contains __file__
+warning: unittest.loader contains __file__
+warning: venv contains __file__
+warning: zipimport contains __file__
+__file__ was encountered in some embedded modules
+PyOxidizer does not set __file__ and this may create problems at run-time
+See https://github.com/indygreg/PyOxidizer/issues/69 for more
+generating custom link library containing Python...
+deriving custom config.c from 98 extension modules
+compiling custom config.c to object file
+locating Apple SDK macosx13.1+ supporting macosx11.0
+using MacOSX (version: 15.5) SDK at /Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk targeting macosx11.0
+running: "cc" "-O0" "-ffunction-sections" "-fdata-sections" "-fPIC" "-arch" "arm64" "-I" "/var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizer-libpythonOm4zzZ/config_c" "-Wall" "-Wextra" "-std=c99" "-DNDEBUG" "-DPy_BUILD_CORE" "-isysroot" "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk" "-o" "/var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizer-libpythonOm4zzZ/config_c/67424a089d53f0ed-config.o" "-c" "/var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizer-libpythonOm4zzZ/config_c/config.c"
+exit status: 0
+running: "ar" "cq" "/var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizer-libpythonOm4zzZ/config_c/libirrelevant.a" "/var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizer-libpythonOm4zzZ/config_c/67424a089d53f0ed-config.o"
+exit status: 0
+running: "ar" "s" "/var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizer-libpythonOm4zzZ/config_c/libirrelevant.a"
+exit status: 0
+resolving inputs for custom Python library...
+linking customized Python library...
+invoking `ar s` to index archive symbols
+30500944 byte Python library created
+locating Apple SDK macosx13.1+ supporting macosx11.0
+using MacOSX (version: 15.5) SDK at /Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk targeting macosx11.0
+building with Rust 1.66.0
+build command: "MACOSX_DEPLOYMENT_TARGET=11.0" "PYO3_CONFIG_FILE=/var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizeraHd9s4/artifacts/pyo3-build-config-file.txt" "PYOXIDIZER_ARTIFACT_DIR=/var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizeraHd9s4/artifacts" "PYOXIDIZER_REUSE_ARTIFACTS=1" "RUSTC=/Users/ricardo/Library/Caches/pyoxidizer/rust/1.66.0-aarch64-apple-darwin/bin/rustc" "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk" /Users/ricardo/Library/Caches/pyoxidizer/rust/1.66.0-aarch64-apple-darwin/bin/cargo build --target aarch64-apple-darwin --target-dir /var/folders/s2/fbsy9fjn2msc1w007w3qdz480000gn/T/pyoxidizeraHd9s4/build/target --bin standup_reminder --locked --release --no-default-features --features "build-mode-prebuilt-artifacts global-allocator-jemalloc allocator-jemalloc"
+    Updating crates.io index

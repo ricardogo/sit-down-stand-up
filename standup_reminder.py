@@ -22,11 +22,11 @@ from AppKit import (
     NSLineBreakByWordWrapping, NSPopover, NSViewController, NSPopoverBehaviorTransient,
     NSMinYEdge, NSImageView, NSImage, NSImageScaleProportionallyUpOrDown
 )
-from Foundation import NSNotificationCenter
+from Foundation import NSNotificationCenter, NSOperationQueue, NSBlockOperation
 import objc
 import UserNotifications
 
-VERSION = "1.7.3"
+VERSION = "2.0.0"
 SNOOZE_DURATION = 5 * 60  # 5 minutes in seconds
 
 # PostHog analytics
@@ -182,6 +182,7 @@ class StandUpApp(rumps.App):
             rumps.MenuItem("Record Snoozed", callback=lambda _: self.record_snoozed()),
             rumps.separator,
             rumps.MenuItem("Fake Old Version (1.0.0)", callback=self.dev_fake_old_version),
+            rumps.MenuItem("Reset All Data", callback=self.dev_reset_all_data),
         ]
         self.dev_menu = ("Dev", self.dev_menu_items)
 
@@ -287,13 +288,13 @@ class StandUpApp(rumps.App):
 
         center.setNotificationCategories_({standup_category, sitdown_category})
 
-        # Show notification settings prompt on first run
-        self.check_first_run()
-
         # Initialize stats menu
         self.update_stats_menu()
 
         self.timer.start()
+
+        # Show notification settings prompt on first run (defer until app is initialized)
+        threading.Timer(1.0, self.check_first_run).start()
 
         # Track app opened
         self.track("app_opened", {"version": VERSION})
@@ -379,8 +380,28 @@ class StandUpApp(rumps.App):
         """Dev: Show notification settings prompt"""
         self.show_notification_settings_prompt()
 
+    def dev_reset_all_data(self, _):
+        """Dev: Reset all saved data (config and stats)"""
+        try:
+            if os.path.exists(self.config_path):
+                os.remove(self.config_path)
+            if os.path.exists(self.stats_path):
+                os.remove(self.stats_path)
+            rumps.alert("Data Reset", "All config and stats have been deleted. Restart the app to see the first-run popover.")
+        except Exception as e:
+            rumps.alert("Error", f"Failed to reset data: {str(e)}")
+
     def show_notification_settings_prompt(self):
         """Show popover prompt to configure notification settings"""
+        # Dispatch popover creation to main thread
+        def run_on_main():
+            self._show_notification_settings_prompt_on_main_thread()
+
+        op = NSBlockOperation.blockOperationWithBlock_(run_on_main)
+        NSOperationQueue.mainQueue().addOperation_(op)
+
+    def _show_notification_settings_prompt_on_main_thread(self):
+        """Actually show the popover (must be on main thread)"""
         popover_width = 350
         popover_height = 388
 
@@ -471,7 +492,7 @@ class StandUpApp(rumps.App):
         # Get the status item button from rumps and show popover
         status_button = self._nsapp.nsstatusitem.button()
         self.popover.showRelativeToRect_ofView_preferredEdge_(
-            status_button.bounds(), status_button, NSMinYEdge
+            status_button.frame(), status_button.superview(), NSMinYEdge
         )
 
     def screenDidSleep_(self, notification):
@@ -552,7 +573,8 @@ class StandUpApp(rumps.App):
         self.stats_streak.title = f"Current streak: {streak} 🔥"
 
         # Today's stats
-        today_stats = stats["days"].get(today, {"completed": 0, "snoozed": 0, "best_streak": 0})
+        days = stats.get("days", {})
+        today_stats = days.get(today, {"completed": 0, "snoozed": 0, "best_streak": 0})
         self.stats_today_stoodup.title = f"  Stood up: {today_stats.get('completed', 0)}"
         self.stats_today_snoozed.title = f"  Snoozed: {today_stats.get('snoozed', 0)}"
         self.stats_today_best.title = f"  Best streak: {today_stats.get('best_streak', 0)}"
@@ -560,7 +582,7 @@ class StandUpApp(rumps.App):
         # All-time stats
         total_stoodup = 0
         total_snoozed = 0
-        for day_stats in stats["days"].values():
+        for day_stats in days.values():
             total_stoodup += day_stats.get("completed", 0)
             total_snoozed += day_stats.get("snoozed", 0)
 
