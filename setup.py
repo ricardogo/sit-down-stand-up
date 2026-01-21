@@ -9,12 +9,12 @@ OPTIONS = {
     'argv_emulation': False,
     'iconfile': 'icon.icns',
     'plist': {
-        'CFBundleName': 'Sit Down. Stand Up',
-        'CFBundleDisplayName': 'Sit Down. Stand Up',
+        'CFBundleName': 'Get up, Stand up',
+        'CFBundleDisplayName': 'Get up, Stand up',
         'CFBundleGetInfoString': "Reminds you to stand up at regular intervals",
         'CFBundleIdentifier': "com.sitdown.standup",
-        'CFBundleVersion': "2.0.0",
-        'CFBundleShortVersionString': "2.0.0",
+        'CFBundleVersion': "2.0.1",
+        'CFBundleShortVersionString': "2.0.1",
         'NSHumanReadableCopyright': "Copyright © 2026",
         'LSUIElement': True,  # Set to False to show in Dock, True to hide
     },
@@ -22,7 +22,7 @@ OPTIONS = {
 }
 
 setup(
-    name='Sit Down. Stand Up',
+    name='Get up, Stand up',
     app=APP,
     data_files=DATA_FILES,
     options={'py2app': OPTIONS},

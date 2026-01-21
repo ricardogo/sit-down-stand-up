@@ -24,14 +24,14 @@ sed -i '' "s/'CFBundleShortVersionString': \".*\"/'CFBundleShortVersionString': 
 cat > version.json << EOF
 {
   "version": "$VERSION",
-  "download_url": "https://github.com/ricardogo/sit-down-stand-up/releases/download/v$VERSION/SitDown.StandUp.app.zip",
+  "download_url": "https://github.com/ricardogo/sit-down-stand-up/releases/download/v$VERSION/GetUpStandUp.app.zip",
   "notes": "$RELEASE_NOTES"
 }
 EOF
 
 # Kill running app
 echo "==> Stopping app..."
-pkill -f "Sit Down. Stand Up" 2>/dev/null || true
+pkill -f "Get up, Stand up" 2>/dev/null || true
 
 # Build
 echo "==> Building..."
@@ -41,15 +41,15 @@ python3 setup.py py2app
 # Fix embedded Python path
 install_name_tool -change "@executable_path/../../../../Python3" \
   "@executable_path/../Frameworks/Python3.framework/Versions/3.9/Python3" \
-  "dist/Sit Down. Stand Up.app/Contents/MacOS/python"
+  "dist/Get up, Stand up.app/Contents/MacOS/python"
 
 # Re-sign the app with ad-hoc signature
-codesign --force --deep --sign - "dist/Sit Down. Stand Up.app"
+codesign --force --deep --sign - "dist/Get up, Stand up.app"
 
 # Create zip (using ditto to preserve symlinks and macOS metadata)
 echo "==> Creating zip..."
 cd dist
-ditto -c -k --sequesterRsrc --keepParent "Sit Down. Stand Up.app" SitDown.StandUp.app.zip
+ditto -c -k --sequesterRsrc --keepParent "Get up, Stand up.app" GetUpStandUp.app.zip
 cd ..
 
 # Commit and tag

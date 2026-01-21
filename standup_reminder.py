@@ -26,7 +26,7 @@ from Foundation import NSNotificationCenter, NSOperationQueue, NSBlockOperation
 import objc
 import UserNotifications
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 SNOOZE_DURATION = 5 * 60  # 5 minutes in seconds
 
 # PostHog analytics
