@@ -64,7 +64,7 @@ git push origin main --tags
 
 # Create release
 echo "==> Creating GitHub release..."
-gh release create "v$VERSION" dist/SitDown.StandUp.app.zip --title "v$VERSION" --notes "$RELEASE_NOTES"
+gh release create "v$VERSION" dist/GetUpStandUp.app.zip --title "v$VERSION" --notes "$RELEASE_NOTES"
 
 echo "==> Done! Released v$VERSION"
 echo "https://github.com/ricardogo/sit-down-stand-up/releases/tag/v$VERSION"

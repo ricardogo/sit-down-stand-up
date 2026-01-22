@@ -26,7 +26,7 @@ from Foundation import NSNotificationCenter, NSOperationQueue, NSBlockOperation
 import objc
 import UserNotifications
 
-VERSION = "2.0.1"
+VERSION = "2.0.2"
 SNOOZE_DURATION = 5 * 60  # 5 minutes in seconds
 
 # PostHog analytics
@@ -61,8 +61,11 @@ class NotificationDelegate(objc.lookUpClass('NSObject')):
             elif data == "sitdown" and self.app:
                 self.app.record_completed()
         elif action == UserNotifications.UNNotificationDismissActionIdentifier:
-            # User dismissed the notification
-            if data == "sitdown" and self.app:
+            # User dismissed the notification (by clicking X button)
+            if data == "standup" and self.app:
+                # Breaking streak when standup notification is dismissed
+                self.app.clear_streak()
+            elif data == "sitdown" and self.app:
                 self.app.clear_streak()
 
         # Must call completion handler

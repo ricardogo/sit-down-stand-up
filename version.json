@@ -1,5 +1,5 @@
 {
-  "version": "2.0.1",
-  "download_url": "https://github.com/ricardogo/sit-down-stand-up/releases/download/v2.0.1/GetUpStandUp.app.zip",
-  "notes": "Renamed app to 'Get up, Stand up'"
+  "version": "2.0.2",
+  "download_url": "https://github.com/ricardogo/sit-down-stand-up/releases/download/v2.0.2/GetUpStandUp.app.zip",
+  "notes": "Break streak when standup notification is dismissed"
 }
