@@ -26,7 +26,7 @@ from Foundation import NSNotificationCenter, NSOperationQueue, NSBlockOperation
 import objc
 import UserNotifications
 
-VERSION = "2.0.2"
+VERSION = "2.1.0"
 SNOOZE_DURATION = 5 * 60  # 5 minutes in seconds
 
 # PostHog analytics
@@ -49,7 +49,7 @@ class NotificationDelegate(objc.lookUpClass('NSObject')):
         user_info = response.notification().request().content().userInfo()
         data = user_info.get("data") if user_info else None
 
-        # Check if action button was clicked (not dismiss)
+        # Handle action buttons
         if action == "snooze" and self.app:
             self.app.snooze()
         elif action == "moved" and self.app:
@@ -62,6 +62,7 @@ class NotificationDelegate(objc.lookUpClass('NSObject')):
                 self.app.record_completed()
         elif action == UserNotifications.UNNotificationDismissActionIdentifier:
             # User dismissed the notification (by clicking X button)
+            # Note: This is only called for programmatic dismissals, not user X-button clicks
             if data == "standup" and self.app:
                 # Breaking streak when standup notification is dismissed
                 self.app.clear_streak()
@@ -217,6 +218,7 @@ class StandUpApp(rumps.App):
 
         # Track if we're waiting for user to respond to sit down notification
         self.pending_sitdown_response = False
+        self.current_sitdown_notification_id = None
 
         # Menu items
         self.menu = [
@@ -372,12 +374,45 @@ class StandUpApp(rumps.App):
         content.setUserInfo_({"data": "sitdown"})
         content.setInterruptionLevel_(2)  # Time-sensitive
 
+        notification_id = f"sitdown-{time_module.time()}"
+        self.current_sitdown_notification_id = notification_id
+
         request = UserNotifications.UNNotificationRequest.requestWithIdentifier_content_trigger_(
-            f"sitdown-{time_module.time()}", content, None
+            notification_id, content, None
         )
         UserNotifications.UNUserNotificationCenter.currentNotificationCenter().addNotificationRequest_withCompletionHandler_(
             request, lambda error: None
         )
+
+        # Monitor if notification is dismissed by user clicking X button
+        def check_if_dismissed():
+            # Wait a bit before checking to allow the notification to be delivered
+            time_module.sleep(1)
+
+            # Check every 2 seconds for up to 5 minutes if the notification is still there
+            for _ in range(150):  # 150 * 2 = 300 seconds = 5 minutes
+                if not self.pending_sitdown_response:
+                    # User already responded (clicked Yep! or handled it)
+                    break
+
+                time_module.sleep(2)
+
+                # Get list of delivered notifications
+                center = UserNotifications.UNUserNotificationCenter.currentNotificationCenter()
+                center.getDeliveredNotificationsWithCompletionHandler_(
+                    lambda notifications: self._check_notification_list(notifications, notification_id)
+                )
+
+        threading.Thread(target=check_if_dismissed, daemon=True).start()
+
+    def _check_notification_list(self, notifications, notification_id):
+        """Check if the notification is still in the delivered list"""
+        notification_ids = [n.request().identifier() for n in notifications]
+
+        # If the notification was there and now it's gone, user dismissed it
+        if self.current_sitdown_notification_id == notification_id and notification_id not in notification_ids and self.pending_sitdown_response:
+            print(f"DEBUG: Sitdown notification {notification_id} was dismissed by user")
+            self.clear_streak()
 
     def dev_notification_settings(self, _):
         """Dev: Show notification settings prompt"""

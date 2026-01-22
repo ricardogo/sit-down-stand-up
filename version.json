@@ -1,5 +1,5 @@
 {
-  "version": "2.0.2",
-  "download_url": "https://github.com/ricardogo/sit-down-stand-up/releases/download/v2.0.2/GetUpStandUp.app.zip",
-  "notes": "Break streak when standup notification is dismissed"
+  "version": "2.1.0",
+  "download_url": "https://github.com/ricardogo/sit-down-stand-up/releases/download/v2.1.0/GetUpStandUp.app.zip",
+  "notes": "Improved notification handling with dismiss detection"
 }
